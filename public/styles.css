@@ -36,6 +36,10 @@ h1 {
   margin-bottom: 1rem;
 }
 
+.card h2 {
+  margin-top: 0;
+}
+
 .hidden {
   display: none;
 }
@@ -53,8 +57,29 @@ label span {
   margin-bottom: 0.5rem;
 }
 
+label {
+  width: 100%;
+}
+
 input[type='file'] {
   width: 100%;
+}
+
+input[type='email'],
+input[type='password'] {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 0.6rem 0.7rem;
+  font: inherit;
+}
+
+.auth-grid {
+  margin-bottom: 1rem;
+}
+
+.full-width {
+  grid-column: 1 / -1;
 }
 
 button {
@@ -74,6 +99,10 @@ button:disabled {
 
 .status {
   margin-top: 0.75rem;
+}
+
+.card.error {
+  border: 1px solid #dc2626;
 }
 
 .preview-grid {
@@ -101,4 +130,12 @@ img {
   min-height: 200px;
   object-fit: cover;
   background: #e5e7eb;
+}
+
+#resultCard {
+  border-left: 4px solid #0ea5e9;
+}
+
+#resultCard.error {
+  border-left-color: #dc2626;
 }

@@ -1,13 +1,17 @@
-# Face Recognition Node.js App
+# Face Authentication Node.js App
 
-A lightweight Node.js application that serves a browser-based face recognition demo using [face-api.js](https://github.com/justadudewhohacks/face-api.js).
+A lightweight Node.js application that supports user registration and login with:
+- `email + password`
+- facial recognition using [face-api.js](https://github.com/justadudewhohacks/face-api.js)
 
 ## Features
 
-- Upload two images in the browser.
-- Detect a single face in each image.
-- Compare face embeddings with Euclidean distance.
-- Show a match/non-match result.
+- Register users with email, password, and a face image.
+- Store password hashes and facial descriptors on the server.
+- Login with either:
+  - email and password
+  - face image matching against registered users
+- Browser-side face descriptor extraction with `face-api.js`.
 
 ## Prerequisites
 
@@ -22,7 +26,24 @@ npm start
 
 Then open: `http://localhost:3000`
 
+## How it works
+
+1. Registration:
+- Enter email and password.
+- Upload a clear, front-facing face image.
+- The browser extracts a 128-length facial descriptor and sends it to the server.
+
+2. Login with email and password:
+- Enter registered email and password.
+- Server validates password hash.
+
+3. Login with face:
+- Upload a face image.
+- Browser extracts descriptor; server matches with stored users using Euclidean distance.
+
 ## Notes
 
 - Model files are loaded from `https://justadudewhohacks.github.io/face-api.js/models`.
-- This demo compares one face per image and is designed for learning/prototyping.
+- User data is stored in `data/users.json`.
+- Passwords are hashed using PBKDF2 (`sha512`).
+- This app is for learning/prototyping and does not include production auth features (sessions/JWT, rate-limiting, MFA, etc).

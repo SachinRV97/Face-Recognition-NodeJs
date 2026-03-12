@@ -3,42 +3,71 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Node.js Face Recognition</title>
+    <title>Node.js Face Authentication</title>
     <link rel="stylesheet" href="styles.css" />
     <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
     <script defer src="app.js"></script>
   </head>
   <body>
     <main class="container">
-      <h1>Node.js Face Recognition Demo</h1>
+      <h1>Face Authentication</h1>
       <p class="subtitle">
-        Upload two photos and compare whether they likely contain the same person.
+        Register with email, password, and face data, then login with either facial match or email and password.
       </p>
 
       <section class="card">
-        <div class="input-grid">
+        <h2>Registration</h2>
+        <div class="input-grid auth-grid">
           <label>
-            <span>Reference image</span>
-            <input id="knownInput" type="file" accept="image/*" />
+            <span>Email</span>
+            <input id="registerEmail" type="email" placeholder="you@example.com" />
           </label>
           <label>
-            <span>Candidate image</span>
-            <input id="candidateInput" type="file" accept="image/*" />
+            <span>Password</span>
+            <input id="registerPassword" type="password" placeholder="At least 6 characters" />
+          </label>
+          <label class="full-width">
+            <span>Face image</span>
+            <input id="registerFaceInput" type="file" accept="image/*" />
           </label>
         </div>
 
-        <button id="compareBtn" disabled>Compare Faces</button>
+        <button id="registerBtn" disabled>Register User</button>
         <p id="status" class="status">Loading models...</p>
+      </section>
+
+      <section class="card">
+        <h2>Login with Email and Password</h2>
+        <div class="input-grid auth-grid">
+          <label>
+            <span>Email</span>
+            <input id="loginEmail" type="email" placeholder="you@example.com" />
+          </label>
+          <label>
+            <span>Password</span>
+            <input id="loginPassword" type="password" placeholder="Your password" />
+          </label>
+        </div>
+        <button id="emailLoginBtn">Login with Email & Password</button>
+      </section>
+
+      <section class="card">
+        <h2>Login with Face</h2>
+        <label>
+          <span>Face image</span>
+          <input id="loginFaceInput" type="file" accept="image/*" />
+        </label>
+        <button id="faceLoginBtn" disabled>Login with Face</button>
       </section>
 
       <section class="preview-grid">
         <figure>
-          <figcaption>Reference</figcaption>
-          <img id="knownPreview" alt="Reference preview" />
+          <figcaption>Registration Face Preview</figcaption>
+          <img id="registerFacePreview" alt="Registration face preview" />
         </figure>
         <figure>
-          <figcaption>Candidate</figcaption>
-          <img id="candidatePreview" alt="Candidate preview" />
+          <figcaption>Face Login Preview</figcaption>
+          <img id="loginFacePreview" alt="Face login preview" />
         </figure>
       </section>
 
