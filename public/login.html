@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Face Auth | Login Choice</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script defer src="auth-common.js"></script>
+    <script defer src="login-choice.js"></script>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <a class="brand" href="/">Face Auth</a>
+        <nav class="navlinks">
+          <a href="/register.html">Register</a>
+          <a href="/login.html">Login</a>
+        </nav>
+      </header>
+
+      <main class="page">
+        <section class="hero stack">
+          <h1>Choose Login Method</h1>
+          <p class="subtitle">Use email and password, or login directly with your face image.</p>
+          <p id="flash" class="feedback hidden"></p>
+        </section>
+
+        <section class="card">
+          <div class="option-grid">
+            <article class="option-card">
+              <h3>Email & Password</h3>
+              <p class="muted">Standard login with your registered credentials.</p>
+              <a id="emailLoginLink" class="button-link" href="/login-email.html">Continue</a>
+            </article>
+            <article class="option-card">
+              <h3>Face Login</h3>
+              <p class="muted">Upload your face image and login using facial match.</p>
+              <a class="button-link button-alt" href="/login-face.html">Continue</a>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

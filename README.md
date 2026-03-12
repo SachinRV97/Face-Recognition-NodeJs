@@ -58,6 +58,29 @@ If you see `Port for MSSQLLocalDB not found in localhost`, ensure the LocalDB in
 
 ## How it works
 
+## Page flow
+
+1. `/`:
+- Landing page with navigation to register/login flows.
+
+2. `/register.html`:
+- Register using email, password, and face image.
+- On success, user is redirected to `/login.html`.
+
+3. `/login.html`:
+- Choose login method.
+
+4. `/login-email.html`:
+- Login with email and password.
+
+5. `/login-face.html`:
+- Login with face image.
+
+6. `/dashboard.html`:
+- Displays current logged-in user details.
+
+## Authentication flow
+
 1. Registration:
 - Enter email and password.
 - Upload a clear, front-facing face image.

@@ -3,78 +3,59 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Node.js Face Authentication</title>
+    <title>Face Auth | Home</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="styles.css" />
-    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
-    <script defer src="app.js"></script>
   </head>
   <body>
-    <main class="container">
-      <h1>Face Authentication</h1>
-      <p class="subtitle">
-        Register with email, password, and face data, then login with either facial match or email and password.
-      </p>
+    <div class="shell">
+      <header class="topbar">
+        <a class="brand" href="/">Face Auth</a>
+        <nav class="navlinks">
+          <a href="/register.html">Register</a>
+          <a href="/login.html">Login</a>
+        </nav>
+      </header>
 
-      <section class="card">
-        <h2>Registration</h2>
-        <div class="input-grid auth-grid">
-          <label>
-            <span>Email</span>
-            <input id="registerEmail" type="email" placeholder="you@example.com" />
-          </label>
-          <label>
-            <span>Password</span>
-            <input id="registerPassword" type="password" placeholder="At least 6 characters" />
-          </label>
-          <label class="full-width">
-            <span>Face image</span>
-            <input id="registerFaceInput" type="file" accept="image/*" />
-          </label>
-        </div>
+      <main class="page">
+        <section class="hero stack">
+          <h1>Multi-step Facial Authentication Flow</h1>
+          <p class="subtitle">
+            Use separate pages for registration, login selection, email login, and face login.
+            This keeps each step focused and easy to use.
+          </p>
+          <div class="actions">
+            <a class="button-link" href="/register.html">Start Registration</a>
+            <a class="button-link button-alt" href="/login.html">Go To Login</a>
+          </div>
+        </section>
 
-        <button id="registerBtn" disabled>Register User</button>
-        <p id="status" class="status">Loading models...</p>
-      </section>
-
-      <section class="card">
-        <h2>Login with Email and Password</h2>
-        <div class="input-grid auth-grid">
-          <label>
-            <span>Email</span>
-            <input id="loginEmail" type="email" placeholder="you@example.com" />
-          </label>
-          <label>
-            <span>Password</span>
-            <input id="loginPassword" type="password" placeholder="Your password" />
-          </label>
-        </div>
-        <button id="emailLoginBtn">Login with Email & Password</button>
-      </section>
-
-      <section class="card">
-        <h2>Login with Face</h2>
-        <label>
-          <span>Face image</span>
-          <input id="loginFaceInput" type="file" accept="image/*" />
-        </label>
-        <button id="faceLoginBtn" disabled>Login with Face</button>
-      </section>
-
-      <section class="preview-grid">
-        <figure>
-          <figcaption>Registration Face Preview</figcaption>
-          <img id="registerFacePreview" alt="Registration face preview" />
-        </figure>
-        <figure>
-          <figcaption>Face Login Preview</figcaption>
-          <img id="loginFacePreview" alt="Face login preview" />
-        </figure>
-      </section>
-
-      <section id="resultCard" class="card hidden">
-        <h2>Result</h2>
-        <p id="resultText"></p>
-      </section>
-    </main>
+        <section class="card">
+          <h2>Flow</h2>
+          <div class="option-grid">
+            <article class="option-card">
+              <h3>1. Register</h3>
+              <p class="muted">Add email, password, and face image.</p>
+              <a class="button-link button-outline" href="/register.html">Open Register</a>
+            </article>
+            <article class="option-card">
+              <h3>2. Choose Login Method</h3>
+              <p class="muted">Select either email/password or facial login.</p>
+              <a class="button-link button-outline" href="/login.html">Open Login Choice</a>
+            </article>
+            <article class="option-card">
+              <h3>3. Access Dashboard</h3>
+              <p class="muted">On successful login, user details appear on dashboard.</p>
+              <a class="button-link button-outline" href="/dashboard.html">Open Dashboard</a>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
   </body>
 </html>
