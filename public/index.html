@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Node.js Face Recognition</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <script defer src="app.js"></script>
+  </head>
+  <body>
+    <main class="container">
+      <h1>Node.js Face Recognition Demo</h1>
+      <p class="subtitle">
+        Upload two photos and compare whether they likely contain the same person.
+      </p>
+
+      <section class="card">
+        <div class="input-grid">
+          <label>
+            <span>Reference image</span>
+            <input id="knownInput" type="file" accept="image/*" />
+          </label>
+          <label>
+            <span>Candidate image</span>
+            <input id="candidateInput" type="file" accept="image/*" />
+          </label>
+        </div>
+
+        <button id="compareBtn" disabled>Compare Faces</button>
+        <p id="status" class="status">Loading models...</p>
+      </section>
+
+      <section class="preview-grid">
+        <figure>
+          <figcaption>Reference</figcaption>
+          <img id="knownPreview" alt="Reference preview" />
+        </figure>
+        <figure>
+          <figcaption>Candidate</figcaption>
+          <img id="candidatePreview" alt="Candidate preview" />
+        </figure>
+      </section>
+
+      <section id="resultCard" class="card hidden">
+        <h2>Result</h2>
+        <p id="resultText"></p>
+      </section>
+    </main>
+  </body>
+</html>
