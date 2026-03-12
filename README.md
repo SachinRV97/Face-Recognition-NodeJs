@@ -3,6 +3,7 @@
 A lightweight Node.js application that supports user registration and login with:
 - `email + password`
 - facial recognition using [face-api.js](https://github.com/justadudewhohacks/face-api.js)
+- Microsoft SQL Server (`mssql` driver) for user storage
 
 ## Features
 
@@ -16,6 +17,7 @@ A lightweight Node.js application that supports user registration and login with
 ## Prerequisites
 
 - Node.js 18+
+- SQL Server instance
 
 ## Run locally
 
@@ -25,6 +27,34 @@ npm start
 ```
 
 Then open: `http://localhost:3000`
+
+## SQL Server configuration
+
+The server reads these environment variables:
+
+- `DB_SERVER` (default: `(localdb)\\MSSQLLocalDB`)
+- `DB_USER` (default: `sa`)
+- `DB_PASSWORD` (default: `123456`)
+- `DB_NAME` (default: `FaceRecognition`)
+- `DB_PORT` (optional)
+- `DB_ENCRYPT` (default: `false`)
+- `DB_TRUST_SERVER_CERT` (default: `true`)
+
+Example:
+
+```bash
+set DB_SERVER=(localdb)\MSSQLLocalDB
+set DB_USER=sa
+set DB_PASSWORD=123456
+set DB_NAME=FaceRecognition
+npm start
+```
+
+On startup, the app creates the database and `dbo.Users` table if missing.
+
+Note: `LocalDB` often uses Windows Authentication. If SQL login `sa` is disabled in your instance, use a SQL-auth enabled instance (for example `localhost\\SQLEXPRESS`) or update credentials accordingly.
+
+If you see `Port for MSSQLLocalDB not found in localhost`, ensure the LocalDB instance is running or switch to a SQL Server instance that accepts SQL authentication.
 
 ## How it works
 
@@ -44,6 +74,6 @@ Then open: `http://localhost:3000`
 ## Notes
 
 - Model files are loaded from `https://justadudewhohacks.github.io/face-api.js/models`.
-- User data is stored in `data/users.json`.
+- User data is stored in SQL Server table `dbo.Users`.
 - Passwords are hashed using PBKDF2 (`sha512`).
 - This app is for learning/prototyping and does not include production auth features (sessions/JWT, rate-limiting, MFA, etc).

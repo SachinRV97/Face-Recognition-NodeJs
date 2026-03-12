@@ -1,12 +1,24 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const sql = require('mssql');
 const { pbkdf2Sync, randomBytes, randomUUID, timingSafeEqual } = require('crypto');
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
-const DATA_DIR = path.join(__dirname, 'data');
-const USERS_FILE = path.join(DATA_DIR, 'users.json');
+
+const DB_SERVER = process.env.DB_SERVER || '(localdb)\\MSSQLLocalDB';
+const DB_USER = process.env.DB_USER || 'sa';
+const DB_PASSWORD = process.env.DB_PASSWORD || '123456';
+const DB_NAME = process.env.DB_NAME || 'FaceRecognition';
+const DB_PORT = process.env.DB_PORT ? Number(process.env.DB_PORT) : undefined;
+const DB_ENCRYPT = process.env.DB_ENCRYPT === 'true';
+const DB_TRUST_SERVER_CERT = process.env.DB_TRUST_SERVER_CERT !== 'false';
+const LOCAL_DB_PATTERN = /^\(localdb\)\\(.+)$/i;
+const localDbMatch = LOCAL_DB_PATTERN.exec(DB_SERVER);
+const DB_HOST = localDbMatch ? 'localhost' : DB_SERVER;
+const DB_INSTANCE = localDbMatch ? localDbMatch[1] : null;
+
 const DISTANCE_THRESHOLD = 0.6;
 const PASSWORD_ITERATIONS = 100000;
 const PASSWORD_KEYLEN = 64;
@@ -23,6 +35,37 @@ const mimeTypes = {
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon'
 };
+
+const baseDbConfig = {
+  server: DB_HOST,
+  user: DB_USER,
+  password: DB_PASSWORD,
+  options: {
+    encrypt: DB_ENCRYPT,
+    trustServerCertificate: DB_TRUST_SERVER_CERT,
+    enableArithAbort: true
+  },
+  pool: {
+    max: 10,
+    min: 0,
+    idleTimeoutMillis: 30000
+  }
+};
+
+if (DB_INSTANCE) {
+  baseDbConfig.options.instanceName = DB_INSTANCE;
+}
+
+if (Number.isInteger(DB_PORT) && DB_PORT > 0) {
+  baseDbConfig.port = DB_PORT;
+}
+
+const masterDbConfig = { ...baseDbConfig, database: 'master' };
+const appDbConfig = { ...baseDbConfig, database: DB_NAME };
+
+let appPoolPromise = null;
+let databaseInitPromise = null;
+let databaseInitError = null;
 
 function sendJson(res, statusCode, payload) {
   res.writeHead(statusCode, { 'Content-Type': 'application/json; charset=UTF-8' });
@@ -46,31 +89,104 @@ function sendFile(res, filePath) {
   });
 }
 
-function ensureUserStore() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+function getAppPool() {
+  if (!appPoolPromise) {
+    const pool = new sql.ConnectionPool(appDbConfig);
+    appPoolPromise = pool.connect().catch((error) => {
+      appPoolPromise = null;
+      throw error;
+    });
   }
 
-  if (!fs.existsSync(USERS_FILE)) {
-    fs.writeFileSync(USERS_FILE, '[]', 'utf8');
-  }
+  return appPoolPromise;
 }
 
-function readUsers() {
-  ensureUserStore();
+async function closeAppPool() {
+  if (!appPoolPromise) {
+    return;
+  }
 
   try {
-    const raw = fs.readFileSync(USERS_FILE, 'utf8');
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    const pool = await appPoolPromise;
+    await pool.close();
   } catch (error) {
-    return [];
+    // Ignore close errors during shutdown.
+  } finally {
+    appPoolPromise = null;
   }
 }
 
-function writeUsers(users) {
-  ensureUserStore();
-  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf8');
+async function doInitializeDatabase() {
+  const masterPool = await new sql.ConnectionPool(masterDbConfig).connect();
+
+  try {
+    await masterPool
+      .request()
+      .input('dbName', sql.NVarChar(128), DB_NAME)
+      .query(`
+        IF DB_ID(@dbName) IS NULL
+        BEGIN
+          DECLARE @safeDbName NVARCHAR(258) = N'[' + REPLACE(@dbName, N']', N']]') + N']';
+          DECLARE @createSql NVARCHAR(MAX) = N'CREATE DATABASE ' + @safeDbName;
+          EXEC(@createSql);
+        END
+      `);
+  } finally {
+    await masterPool.close();
+  }
+
+  const appPool = await getAppPool();
+
+  await appPool.request().query(`
+    IF OBJECT_ID('dbo.Users', 'U') IS NULL
+    BEGIN
+      CREATE TABLE dbo.Users (
+        Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+        Email NVARCHAR(255) NOT NULL,
+        PasswordSalt NVARCHAR(128) NOT NULL,
+        PasswordHash NVARCHAR(256) NOT NULL,
+        FaceDescriptor NVARCHAR(MAX) NOT NULL,
+        CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+      );
+    END
+  `);
+
+  await appPool.request().query(`
+    IF NOT EXISTS (
+      SELECT 1
+      FROM sys.indexes
+      WHERE name = 'UX_Users_Email'
+        AND object_id = OBJECT_ID('dbo.Users')
+    )
+    BEGIN
+      CREATE UNIQUE INDEX UX_Users_Email ON dbo.Users (Email);
+    END
+  `);
+}
+
+function initializeDatabase() {
+  if (!databaseInitPromise) {
+    databaseInitPromise = doInitializeDatabase().catch((error) => {
+      databaseInitError = error;
+      throw error;
+    });
+  }
+
+  return databaseInitPromise;
+}
+
+async function ensureDatabaseReady() {
+  if (databaseInitError) {
+    throw databaseInitError;
+  }
+
+  try {
+    await initializeDatabase();
+  } catch (error) {
+    databaseInitError = error;
+    await closeAppPool();
+    throw error;
+  }
 }
 
 function parseJsonBody(req) {
@@ -171,15 +287,143 @@ function findBestFaceMatch(users, candidateDescriptor) {
   return bestMatch;
 }
 
+function parseFaceDescriptor(value) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    return isValidFaceDescriptor(parsed) ? parsed : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function safeIsoDate(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return date.toISOString();
+}
+
 function sanitizeUser(user) {
   return {
     id: user.id,
     email: user.email,
-    createdAt: user.createdAt
+    createdAt: safeIsoDate(user.createdAt)
   };
 }
 
+async function registerUser(email, password, faceDescriptor) {
+  const pool = await getAppPool();
+
+  const existingUser = await pool
+    .request()
+    .input('email', sql.NVarChar(255), email)
+    .query(`
+      SELECT TOP 1
+        Id AS id
+      FROM dbo.Users
+      WHERE Email = @email
+    `);
+
+  if (existingUser.recordset.length > 0) {
+    return { error: 'Email is already registered.', statusCode: 409 };
+  }
+
+  const passwordData = hashPassword(password);
+  const user = {
+    id: randomUUID(),
+    email,
+    createdAt: new Date()
+  };
+
+  try {
+    await pool
+      .request()
+      .input('id', sql.UniqueIdentifier, user.id)
+      .input('email', sql.NVarChar(255), email)
+      .input('passwordSalt', sql.NVarChar(128), passwordData.salt)
+      .input('passwordHash', sql.NVarChar(256), passwordData.hash)
+      .input('faceDescriptor', sql.NVarChar(sql.MAX), JSON.stringify(faceDescriptor))
+      .input('createdAt', sql.DateTime2, user.createdAt)
+      .query(`
+        INSERT INTO dbo.Users (Id, Email, PasswordSalt, PasswordHash, FaceDescriptor, CreatedAt)
+        VALUES (@id, @email, @passwordSalt, @passwordHash, @faceDescriptor, @createdAt)
+      `);
+  } catch (error) {
+    if (error && (error.number === 2601 || error.number === 2627)) {
+      return { error: 'Email is already registered.', statusCode: 409 };
+    }
+
+    throw error;
+  }
+
+  return { user };
+}
+
+async function loginByEmail(email, password) {
+  const pool = await getAppPool();
+  const result = await pool
+    .request()
+    .input('email', sql.NVarChar(255), email)
+    .query(`
+      SELECT TOP 1
+        Id AS id,
+        Email AS email,
+        PasswordSalt AS passwordSalt,
+        PasswordHash AS passwordHash,
+        CreatedAt AS createdAt
+      FROM dbo.Users
+      WHERE Email = @email
+    `);
+
+  const user = result.recordset[0];
+  if (!user) {
+    return null;
+  }
+
+  const passwordOk = verifyPassword(password, user.passwordSalt, user.passwordHash);
+  if (!passwordOk) {
+    return null;
+  }
+
+  return user;
+}
+
+async function loginByFace(faceDescriptor) {
+  const pool = await getAppPool();
+  const result = await pool.request().query(`
+    SELECT
+      Id AS id,
+      Email AS email,
+      FaceDescriptor AS faceDescriptor,
+      CreatedAt AS createdAt
+    FROM dbo.Users
+  `);
+
+  const users = result.recordset
+    .map((record) => ({
+      id: record.id,
+      email: record.email,
+      faceDescriptor: parseFaceDescriptor(record.faceDescriptor),
+      createdAt: record.createdAt
+    }))
+    .filter((user) => user.faceDescriptor);
+
+  const bestMatch = findBestFaceMatch(users, faceDescriptor);
+  if (!bestMatch || bestMatch.distance > DISTANCE_THRESHOLD) {
+    return null;
+  }
+
+  return bestMatch;
+}
+
 async function handleApiRoute(req, res, pathname) {
+  await ensureDatabaseReady();
+
   if (req.method === 'POST' && pathname === '/api/register') {
     const body = await parseJsonBody(req);
     const email = normalizeEmail(body.email);
@@ -201,29 +445,15 @@ async function handleApiRoute(req, res, pathname) {
       return;
     }
 
-    const users = readUsers();
-    const alreadyRegistered = users.some((user) => normalizeEmail(user.email) === email);
-    if (alreadyRegistered) {
-      sendJson(res, 409, { error: 'Email is already registered.' });
+    const registration = await registerUser(email, password, faceDescriptor);
+    if (registration.error) {
+      sendJson(res, registration.statusCode, { error: registration.error });
       return;
     }
 
-    const passwordData = hashPassword(password);
-    const user = {
-      id: randomUUID(),
-      email,
-      passwordSalt: passwordData.salt,
-      passwordHash: passwordData.hash,
-      faceDescriptor,
-      createdAt: new Date().toISOString()
-    };
-
-    users.push(user);
-    writeUsers(users);
-
     sendJson(res, 201, {
       message: 'Registration successful.',
-      user: sanitizeUser(user)
+      user: sanitizeUser(registration.user)
     });
     return;
   }
@@ -238,15 +468,8 @@ async function handleApiRoute(req, res, pathname) {
       return;
     }
 
-    const users = readUsers();
-    const user = users.find((item) => normalizeEmail(item.email) === email);
+    const user = await loginByEmail(email, password);
     if (!user) {
-      sendJson(res, 401, { error: 'Invalid email or password.' });
-      return;
-    }
-
-    const passwordOk = verifyPassword(password, user.passwordSalt, user.passwordHash);
-    if (!passwordOk) {
       sendJson(res, 401, { error: 'Invalid email or password.' });
       return;
     }
@@ -268,10 +491,8 @@ async function handleApiRoute(req, res, pathname) {
       return;
     }
 
-    const users = readUsers();
-    const bestMatch = findBestFaceMatch(users, faceDescriptor);
-
-    if (!bestMatch || bestMatch.distance > DISTANCE_THRESHOLD) {
+    const bestMatch = await loginByFace(faceDescriptor);
+    if (!bestMatch) {
       sendJson(res, 401, { error: 'No matching registered face found.' });
       return;
     }
@@ -311,6 +532,14 @@ const server = http.createServer((req, res) => {
 
   if (pathname.startsWith('/api/')) {
     handleApiRoute(req, res, pathname).catch((error) => {
+      if (databaseInitError) {
+        sendJson(res, 503, {
+          error: 'Database unavailable. Verify SQL Server connection settings and restart the app.',
+          details: databaseInitError.message
+        });
+        return;
+      }
+
       const statusCode = error.message === 'Payload too large.' ? 413 : 400;
       sendJson(res, statusCode, { error: error.message || 'Server Error' });
     });
@@ -326,6 +555,24 @@ const server = http.createServer((req, res) => {
   sendFile(res, resolvedPath);
 });
 
+initializeDatabase()
+  .then(() => {
+    console.log(`Database ready: ${DB_NAME} on ${DB_SERVER}`);
+  })
+  .catch((error) => {
+    console.error(`Database initialization failed: ${error.message}`);
+    if (localDbMatch) {
+      console.error(
+        'LocalDB note: SQL login (sa/password) may be disabled; use a SQL-auth enabled instance if needed.'
+      );
+    }
+  });
+
 server.listen(PORT, () => {
   console.log(`Face Recognition app is running at http://localhost:${PORT}`);
+});
+
+process.on('SIGINT', async () => {
+  await closeAppPool();
+  process.exit(0);
 });
