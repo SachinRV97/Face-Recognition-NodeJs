@@ -28,7 +28,7 @@
       <main class="page">
         <section class="hero stack">
           <h1>Register New User</h1>
-          <p class="subtitle">Create account with email, password, and a clear front-facing face image.</p>
+          <p class="subtitle">Create account with email, password, and live camera capture only.</p>
         </section>
 
         <section class="card">
@@ -44,14 +44,17 @@
               </label>
             </div>
 
-            <label for="faceImage">
-              Face Image
-              <input id="faceImage" type="file" accept="image/*" required />
-            </label>
+            <h2>Camera Capture</h2>
+            <video id="cameraView" class="preview camera-view" autoplay muted playsinline></video>
+            <img id="facePreview" class="preview hidden" alt="Captured face preview" />
 
-            <img id="facePreview" class="preview" alt="Registration face preview" />
+            <div class="actions">
+              <button id="startCameraButton" type="button" class="button-outline">Start Camera</button>
+              <button id="captureButton" type="button" class="button-alt" disabled>Capture Face</button>
+              <button id="retakeButton" type="button" class="button-outline" disabled>Retake</button>
+            </div>
 
-            <p id="modelStatus" class="status">Loading face recognition models...</p>
+            <p id="modelStatus" class="status">Loading face recognition models and camera...</p>
             <p id="feedback" class="feedback hidden"></p>
 
             <div class="actions">

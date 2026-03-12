@@ -262,6 +262,11 @@ button:disabled {
   background: #e5e7eb;
 }
 
+.camera-view {
+  transform: scaleX(-1);
+  background: #0f172a;
+}
+
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

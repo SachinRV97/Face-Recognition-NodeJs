@@ -1,7 +1,8 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const sql = require('mssql');
+const mssql = require('mssql');
+const mssqlMsNode = require('mssql/msnodesqlv8');
 const { pbkdf2Sync, randomBytes, randomUUID, timingSafeEqual } = require('crypto');
 
 const PORT = process.env.PORT || 3000;
@@ -14,10 +15,14 @@ const DB_NAME = process.env.DB_NAME || 'FaceRecognition';
 const DB_PORT = process.env.DB_PORT ? Number(process.env.DB_PORT) : undefined;
 const DB_ENCRYPT = process.env.DB_ENCRYPT === 'true';
 const DB_TRUST_SERVER_CERT = process.env.DB_TRUST_SERVER_CERT !== 'false';
+const DB_DRIVER = (process.env.DB_DRIVER || '').trim().toLowerCase();
+const DB_TRUSTED_CONNECTION = process.env.DB_TRUSTED_CONNECTION === 'true';
 const LOCAL_DB_PATTERN = /^\(localdb\)\\(.+)$/i;
 const localDbMatch = LOCAL_DB_PATTERN.exec(DB_SERVER);
 const DB_HOST = localDbMatch ? 'localhost' : DB_SERVER;
 const DB_INSTANCE = localDbMatch ? localDbMatch[1] : null;
+const USE_MSNODESQLV8 = DB_DRIVER === 'msnodesqlv8' || (!DB_DRIVER && !!localDbMatch);
+const sql = USE_MSNODESQLV8 ? mssqlMsNode : mssql;
 
 const DISTANCE_THRESHOLD = 0.6;
 const PASSWORD_ITERATIONS = 100000;
@@ -36,36 +41,110 @@ const mimeTypes = {
   '.ico': 'image/x-icon'
 };
 
-const baseDbConfig = {
-  server: DB_HOST,
-  user: DB_USER,
-  password: DB_PASSWORD,
-  options: {
-    encrypt: DB_ENCRYPT,
-    trustServerCertificate: DB_TRUST_SERVER_CERT,
-    enableArithAbort: true
-  },
-  pool: {
-    max: 10,
-    min: 0,
-    idleTimeoutMillis: 30000
+function escapeConnectionStringValue(value) {
+  return String(value).replace(/;/g, ';;');
+}
+
+function buildMssqlConfig(database) {
+  const config = {
+    server: DB_HOST,
+    user: DB_USER,
+    password: DB_PASSWORD,
+    database,
+    options: {
+      encrypt: DB_ENCRYPT,
+      trustServerCertificate: DB_TRUST_SERVER_CERT,
+      enableArithAbort: true
+    },
+    pool: {
+      max: 10,
+      min: 0,
+      idleTimeoutMillis: 30000
+    }
+  };
+
+  if (DB_INSTANCE) {
+    config.options.instanceName = DB_INSTANCE;
   }
-};
 
-if (DB_INSTANCE) {
-  baseDbConfig.options.instanceName = DB_INSTANCE;
+  if (Number.isInteger(DB_PORT) && DB_PORT > 0) {
+    config.port = DB_PORT;
+  }
+
+  return config;
 }
 
-if (Number.isInteger(DB_PORT) && DB_PORT > 0) {
-  baseDbConfig.port = DB_PORT;
+function buildMsNodeSqlConfig(database) {
+  const trustedConnection = DB_TRUSTED_CONNECTION || !DB_USER || !DB_PASSWORD;
+  const serverName =
+    Number.isInteger(DB_PORT) && DB_PORT > 0 && !localDbMatch
+      ? `${DB_SERVER},${DB_PORT}`
+      : DB_SERVER;
+
+  let connectionString =
+    `Driver={ODBC Driver 17 for SQL Server};` +
+    `Server=${escapeConnectionStringValue(serverName)};` +
+    `Database=${escapeConnectionStringValue(database)};` +
+    `Encrypt=${DB_ENCRYPT ? 'Yes' : 'No'};` +
+    `TrustServerCertificate=${DB_TRUST_SERVER_CERT ? 'Yes' : 'No'};`;
+
+  if (trustedConnection) {
+    connectionString += 'Trusted_Connection=Yes;';
+  } else {
+    connectionString +=
+      `Uid=${escapeConnectionStringValue(DB_USER)};` +
+      `Pwd=${escapeConnectionStringValue(DB_PASSWORD)};`;
+  }
+
+  return {
+    connectionString,
+    options: {
+      trustedConnection
+    },
+    pool: {
+      max: 10,
+      min: 0,
+      idleTimeoutMillis: 30000
+    }
+  };
 }
 
-const masterDbConfig = { ...baseDbConfig, database: 'master' };
-const appDbConfig = { ...baseDbConfig, database: DB_NAME };
+const masterDbConfig = USE_MSNODESQLV8
+  ? buildMsNodeSqlConfig('master')
+  : buildMssqlConfig('master');
+const appDbConfig = USE_MSNODESQLV8 ? buildMsNodeSqlConfig(DB_NAME) : buildMssqlConfig(DB_NAME);
 
 let appPoolPromise = null;
 let databaseInitPromise = null;
 let databaseInitError = null;
+
+function getErrorMessage(error) {
+  if (!error) {
+    return 'Unknown error';
+  }
+
+  if (typeof error.message === 'string' && error.message !== '[object Object]') {
+    return error.message;
+  }
+
+  if (error.originalError) {
+    return getErrorMessage(error.originalError);
+  }
+
+  if (Array.isArray(error.precedingErrors) && error.precedingErrors.length > 0) {
+    return getErrorMessage(error.precedingErrors[0]);
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch (jsonError) {
+    return String(error);
+  }
+}
 
 function sendJson(res, statusCode, payload) {
   res.writeHead(statusCode, { 'Content-Type': 'application/json; charset=UTF-8' });
@@ -535,7 +614,7 @@ const server = http.createServer((req, res) => {
       if (databaseInitError) {
         sendJson(res, 503, {
           error: 'Database unavailable. Verify SQL Server connection settings and restart the app.',
-          details: databaseInitError.message
+          details: getErrorMessage(databaseInitError)
         });
         return;
       }
@@ -557,14 +636,13 @@ const server = http.createServer((req, res) => {
 
 initializeDatabase()
   .then(() => {
-    console.log(`Database ready: ${DB_NAME} on ${DB_SERVER}`);
+    const driverLabel = USE_MSNODESQLV8 ? 'msnodesqlv8' : 'mssql';
+    console.log(`Database ready: ${DB_NAME} on ${DB_SERVER} (driver: ${driverLabel})`);
   })
   .catch((error) => {
-    console.error(`Database initialization failed: ${error.message}`);
-    if (localDbMatch) {
-      console.error(
-        'LocalDB note: SQL login (sa/password) may be disabled; use a SQL-auth enabled instance if needed.'
-      );
+    console.error(`Database initialization failed: ${getErrorMessage(error)}`);
+    if (localDbMatch && !USE_MSNODESQLV8) {
+      console.error('LocalDB note: set DB_DRIVER=msnodesqlv8 for LocalDB connections.');
     }
   });
 

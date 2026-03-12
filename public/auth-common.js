@@ -109,6 +109,80 @@
     reader.readAsDataURL(file);
   }
 
+  async function startCamera(videoElement) {
+    if (!videoElement) {
+      throw new Error('Camera preview element is missing.');
+    }
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error('Camera API is not supported in this browser.');
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        facingMode: 'user',
+        width: { ideal: 960 },
+        height: { ideal: 720 }
+      }
+    });
+
+    videoElement.srcObject = stream;
+
+    await new Promise((resolve, reject) => {
+      let settled = false;
+      const timeoutId = setTimeout(() => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        videoElement.removeEventListener('loadedmetadata', onLoaded);
+        reject(new Error('Unable to load camera preview.'));
+      }, 7000);
+
+      const onLoaded = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timeoutId);
+        videoElement.removeEventListener('loadedmetadata', onLoaded);
+        resolve();
+      };
+
+      videoElement.addEventListener('loadedmetadata', onLoaded);
+    });
+
+    await videoElement.play();
+    return stream;
+  }
+
+  function stopCamera(stream) {
+    if (!stream || !stream.getTracks) {
+      return;
+    }
+
+    stream.getTracks().forEach((track) => track.stop());
+  }
+
+  function captureFrame(videoElement) {
+    if (!videoElement || !videoElement.videoWidth || !videoElement.videoHeight) {
+      throw new Error('Camera is not ready yet.');
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = videoElement.videoWidth;
+    canvas.height = videoElement.videoHeight;
+
+    const context = canvas.getContext('2d');
+    context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+
+    return {
+      canvas,
+      dataUrl: canvas.toDataURL('image/jpeg', 0.92)
+    };
+  }
+
   function fileToImage(file) {
     return new Promise((resolve, reject) => {
       const objectUrl = URL.createObjectURL(file);
@@ -134,8 +208,16 @@
     }
 
     const image = await fileToImage(file);
+    return descriptorFromElement(image);
+  }
+
+  async function descriptorFromElement(element) {
+    if (!element) {
+      throw new Error('Face input source is missing.');
+    }
+
     const detection = await faceapi
-      .detectSingleFace(image, new faceapi.TinyFaceDetectorOptions())
+      .detectSingleFace(element, new faceapi.TinyFaceDetectorOptions())
       .withFaceLandmarks()
       .withFaceDescriptor();
 
@@ -208,7 +290,11 @@
     renderFlash,
     ensureFaceModels,
     previewImage,
+    startCamera,
+    stopCamera,
+    captureFrame,
     descriptorFromFile,
+    descriptorFromElement,
     postJson,
     savePendingEmail,
     getPendingEmail,

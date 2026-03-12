@@ -7,9 +7,16 @@
     "start": "node server.js",
     "dev": "node server.js"
   },
-  "keywords": ["nodejs", "face-recognition", "face-api", "mssql", "authentication"],
+  "keywords": [
+    "nodejs",
+    "face-recognition",
+    "face-api",
+    "mssql",
+    "authentication"
+  ],
   "license": "MIT",
   "dependencies": {
+    "msnodesqlv8": "^5.1.5",
     "mssql": "^11.0.1"
   }
 }
