@@ -75,7 +75,7 @@ For LocalDB, this app uses `msnodesqlv8` driver. If SQL login fails, set `DB_TRU
 - Login with email and password.
 
 5. `/login-face.html`:
-- Login with live camera capture.
+- Login directly from the live camera feed without showing a captured preview step.
 
 6. `/dashboard.html`:
 - Displays current logged-in user details.

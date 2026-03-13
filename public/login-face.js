@@ -2,26 +2,20 @@
   const auth = window.AuthCommon;
   const form = document.getElementById('faceLoginForm');
   const cameraView = document.getElementById('cameraView');
-  const preview = document.getElementById('facePreview');
   const modelStatus = document.getElementById('modelStatus');
   const feedback = document.getElementById('feedback');
 
   const startCameraButton = document.getElementById('startCameraButton');
-  const captureButton = document.getElementById('captureButton');
-  const retakeButton = document.getElementById('retakeButton');
-  const submitButton = document.getElementById('faceLoginButton');
+  const loginButton = document.getElementById('faceLoginButton');
 
   let cameraStream = null;
   let cameraReady = false;
   let modelsReady = false;
   let startingCamera = false;
   let submitting = false;
-  let capturedCanvas = null;
 
   function updateButtonState() {
-    captureButton.disabled = !(cameraReady && !submitting);
-    retakeButton.disabled = !(cameraReady && capturedCanvas && !submitting);
-    submitButton.disabled = !(cameraReady && modelsReady && capturedCanvas && !submitting);
+    loginButton.disabled = !(cameraReady && modelsReady && !submitting);
     startCameraButton.disabled = startingCamera || (cameraReady && !submitting);
   }
 
@@ -38,7 +32,10 @@
       auth.setText(modelStatus, 'Starting camera...');
       cameraStream = await auth.startCamera(cameraView);
       cameraReady = true;
-      auth.setText(modelStatus, modelsReady ? 'Ready. Capture your face to login.' : 'Camera ready. Loading models...');
+      auth.setText(
+        modelStatus,
+        modelsReady ? 'Ready. Login directly from the live camera.' : 'Camera ready. Loading models...'
+      );
     } catch (error) {
       auth.showFeedback(feedback, 'error', `Camera error: ${error.message}`);
       auth.setText(modelStatus, 'Unable to start camera.');
@@ -49,33 +46,9 @@
     }
   }
 
-  function captureFace() {
-    try {
-      const capture = auth.captureFrame(cameraView);
-      capturedCanvas = capture.canvas;
-      preview.src = capture.dataUrl;
-      preview.classList.remove('hidden');
-      auth.showFeedback(feedback, 'info', 'Face captured. You can retake if needed.');
-      auth.setText(modelStatus, 'Face captured. Submit to login.');
-      updateButtonState();
-    } catch (error) {
-      auth.showFeedback(feedback, 'error', `Capture failed: ${error.message}`);
-      auth.setText(modelStatus, 'Capture failed.');
-    }
-  }
-
-  function retakeFace() {
-    capturedCanvas = null;
-    preview.removeAttribute('src');
-    preview.classList.add('hidden');
-    auth.hideFeedback(feedback);
-    auth.setText(modelStatus, 'Capture a new face image.');
-    updateButtonState();
-  }
-
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (submitButton.disabled) {
+    if (loginButton.disabled) {
       return;
     }
 
@@ -84,6 +57,9 @@
     auth.hideFeedback(feedback);
 
     try {
+      auth.setText(modelStatus, 'Capturing live frame...');
+      const capturedCanvas = auth.captureFrame(cameraView).canvas;
+
       auth.setText(modelStatus, 'Extracting face descriptor...');
       const descriptor = await auth.descriptorFromElement(capturedCanvas);
 
@@ -102,15 +78,13 @@
   });
 
   startCameraButton.addEventListener('click', startCamera);
-  captureButton.addEventListener('click', captureFace);
-  retakeButton.addEventListener('click', retakeFace);
 
   auth
     .ensureFaceModels(modelStatus)
     .then(() => {
       modelsReady = true;
       if (cameraReady) {
-        auth.setText(modelStatus, 'Ready. Capture your face to login.');
+        auth.setText(modelStatus, 'Ready. Login directly from the live camera.');
       }
       updateButtonState();
     })
